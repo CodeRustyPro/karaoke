@@ -4,13 +4,33 @@ let obstacles = [];
 let currentPitch = 0;
 let micLevel = 0;
 let gameOver = false;
+let micStarted = false;
 
 function setup() {
     createCanvas(600, 400);
-    
-    // Start Microphone
+
+    // Show message to start the mic
+    textAlign(CENTER);
+    textSize(20);
+    fill(255);
+    text("Click to Start Microphone", width / 2, height / 2);
+}
+
+function mousePressed() {
+    if (!micStarted) {
+        getAudioContext().resume().then(() => {
+            console.log("🔊 Audio Context Resumed!");
+            startMic();
+            micStarted = true;
+        });
+    }
+}
+function startMic() {
     mic = new p5.AudioIn();
-    mic.start(startPitchDetection);
+    mic.start(() => {
+        console.log("🎤 Microphone started!");
+        startPitchDetection();
+    });
 
     ball = new Ball();
 }
@@ -26,33 +46,43 @@ function startPitchDetection() {
 }
 
 function modelReady() {
-    console.log("Pitch model ready!");
+    console.log("✅ Pitch model ready!");
     detectPitch();
 }
 
 function detectPitch() {
     pitchModel.getPitch((err, frequency) => {
         if (err) {
-            console.error("Pitch Detection Error:", err);
+            console.error("⚠️ Pitch Detection Error:", err);
         } else {
             currentPitch = frequency || 0;
         }
         detectPitch(); // Keep detecting pitch
     });
 }
-
 function draw() {
     background(0);
 
-    // Get microphone volume level
-    micLevel = mic.getLevel();
-    
-    // Debugging info
-    console.log("Mic Level:", micLevel, "Detected Pitch:", currentPitch);
+    if (!micStarted) {
+        fill(255);
+        textSize(20);
+        textAlign(CENTER);
+        text("Click Anywhere to Enable Microphone", width / 2, height / 2);
+        return;
+    }
 
-    // Show text on screen
+    // Get raw mic input
+    micLevel = mic.getLevel();
+    let volHistory = mic.getSources(); // Check if mic sources exist
+
+    // Debugging output
+    console.log("🎙️ Mic Level:", micLevel, "🎵 Detected Pitch:", currentPitch);
+    console.log("🔎 Mic Sources:", volHistory);
+
+    // Display mic info on screen
     fill(255);
     textSize(16);
+    textAlign(LEFT);
     text("Mic Level: " + micLevel.toFixed(5), 20, 30);
     text("Detected Pitch: " + (currentPitch ? currentPitch.toFixed(2) + " Hz" : "No pitch detected"), 20, 50);
 
@@ -71,7 +101,6 @@ function draw() {
         text("Game Over", width / 2 - 80, height / 2);
     }
 }
-
 class Ball {
     constructor() {
         this.x = 50;
