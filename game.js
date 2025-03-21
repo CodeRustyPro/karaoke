@@ -1,28 +1,63 @@
-let mic, fft;
+let mic, pitchModel;
 let ball;
 let obstacles = [];
-let speed = 2;
+let currentPitch = 0;
+let micLevel = 0;
 let gameOver = false;
 
 function setup() {
     createCanvas(600, 400);
-    mic = new p5.AudioIn();
-    mic.start();
     
-    fft = new p5.FFT();
-    fft.setInput(mic);
+    // Start Microphone
+    mic = new p5.AudioIn();
+    mic.start(startPitchDetection);
 
     ball = new Ball();
+}
+
+function startPitchDetection() {
+    let audioContext = getAudioContext();
+    pitchModel = ml5.pitchDetection(
+        "https://cdn.jsdelivr.net/gh/ml5js/ml5-data-and-models/models/crepe/",
+        audioContext,
+        mic.stream,
+        modelReady
+    );
+}
+
+function modelReady() {
+    console.log("Pitch model ready!");
+    detectPitch();
+}
+
+function detectPitch() {
+    pitchModel.getPitch((err, frequency) => {
+        if (err) {
+            console.error("Pitch Detection Error:", err);
+        } else {
+            currentPitch = frequency || 0;
+        }
+        detectPitch(); // Keep detecting pitch
+    });
 }
 
 function draw() {
     background(0);
 
+    // Get microphone volume level
+    micLevel = mic.getLevel();
+    
+    // Debugging info
+    console.log("Mic Level:", micLevel, "Detected Pitch:", currentPitch);
+
+    // Show text on screen
+    fill(255);
+    textSize(16);
+    text("Mic Level: " + micLevel.toFixed(5), 20, 30);
+    text("Detected Pitch: " + (currentPitch ? currentPitch.toFixed(2) + " Hz" : "No pitch detected"), 20, 50);
+
     if (!gameOver) {
-        let spectrum = fft.analyze();
-        let pitch = fft.getCentroid();  // Gets the spectral centroid (approximate pitch)
-        
-        if (pitch > 500) {  // Adjust sensitivity
+        if (currentPitch > 100) {
             ball.moveUp();
         } else {
             ball.moveDown();
@@ -33,7 +68,7 @@ function draw() {
     } else {
         textSize(32);
         fill(255, 0, 0);
-        text('Game Over', width / 2 - 80, height / 2);
+        text("Game Over", width / 2 - 80, height / 2);
     }
 }
 
@@ -45,11 +80,11 @@ class Ball {
     }
 
     moveUp() {
-        this.y -= 5; // Move up with high pitch
+        this.y -= 5;
     }
 
     moveDown() {
-        this.y += 2; // Gravity effect
+        this.y += 2;
     }
 
     show() {
@@ -82,7 +117,7 @@ class Obstacle {
     }
 
     move() {
-        this.x -= speed;
+        this.x -= 3;
     }
 
     show() {
