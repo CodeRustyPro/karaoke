@@ -1,67 +1,99 @@
-// Import p5.js and p5.sound.js before running this script
-let mic, pitch, ballY;
+let mic, fft;
+let ball;
 let obstacles = [];
-let threshold = 200; // Adjust sensitivity
+let speed = 2;
+let gameOver = false;
 
 function setup() {
     createCanvas(600, 400);
     mic = new p5.AudioIn();
     mic.start();
-    pitch = new p5.FFT();
-    ballY = height / 2;
+    
+    fft = new p5.FFT();
+    fft.setInput(mic);
+
+    ball = new Ball();
 }
 
 function draw() {
     background(0);
-    
-    // Get frequency data
-    let spectrum = pitch.analyze();
-    let freq = pitch.getEnergy("treble"); // Using treble as proxy for pitch
-    
-    // Adjust ball position based on voice pitch
-    if (freq > threshold) {
-        ballY -= 3;
-    } else {
-        ballY += 2;
-    }
-    ballY = constrain(ballY, 0, height);
-    
-    // Draw ball
-    fill(0, 255, 0);
-    ellipse(100, ballY, 30, 30);
-    
-    // Generate obstacles
-    if (frameCount % 60 === 0) {
-        obstacles.push({ x: width, y: random(height - 50), w: 20, h: random(50, 150) });
-    }
-    
-    // Move and draw obstacles
-    fill(255, 0, 0);
-    for (let i = obstacles.length - 1; i >= 0; i--) {
-        let obs = obstacles[i];
-        obs.x -= 3;
-        rect(obs.x, obs.y, obs.w, obs.h);
+
+    if (!gameOver) {
+        let spectrum = fft.analyze();
+        let pitch = fft.getCentroid();  // Gets the spectral centroid (approximate pitch)
         
-        // Collision detection
-        if (collides(100, ballY, 30, obs)) {
-            noLoop();
-            fill(255);
-            textSize(32);
-            text("Game Over", width / 2 - 80, height / 2);
+        if (pitch > 500) {  // Adjust sensitivity
+            ball.moveUp();
+        } else {
+            ball.moveDown();
         }
-        
-        // Remove passed obstacles
-        if (obs.x + obs.w < 0) {
-            obstacles.splice(i, 1);
+
+        ball.show();
+        handleObstacles();
+    } else {
+        textSize(32);
+        fill(255, 0, 0);
+        text('Game Over', width / 2 - 80, height / 2);
+    }
+}
+
+class Ball {
+    constructor() {
+        this.x = 50;
+        this.y = height / 2;
+        this.r = 20;
+    }
+
+    moveUp() {
+        this.y -= 5; // Move up with high pitch
+    }
+
+    moveDown() {
+        this.y += 2; // Gravity effect
+    }
+
+    show() {
+        fill(0, 255, 0);
+        ellipse(this.x, this.y, this.r * 2);
+    }
+}
+
+function handleObstacles() {
+    if (frameCount % 90 === 0) {
+        obstacles.push(new Obstacle());
+    }
+
+    for (let obs of obstacles) {
+        obs.move();
+        obs.show();
+
+        if (ballCollides(obs)) {
+            gameOver = true;
         }
     }
 }
 
-function collides(ballX, ballY, ballSize, obs) {
-    return (
-        ballX + ballSize / 2 > obs.x &&
-        ballX - ballSize / 2 < obs.x + obs.w &&
-        ballY + ballSize / 2 > obs.y &&
-        ballY - ballSize / 2 < obs.y + obs.h
-    );
+class Obstacle {
+    constructor() {
+        this.x = width;
+        this.y = random(height - 100);
+        this.w = 30;
+        this.h = 100;
+    }
+
+    move() {
+        this.x -= speed;
+    }
+
+    show() {
+        fill(255, 0, 0);
+        rect(this.x, this.y, this.w, this.h);
+    }
+}
+
+function ballCollides(obs) {
+    return ball.x + ball.r > obs.x &&
+           ball.x - ball.r < obs.x + obs.w &&
+           ball.y + ball.r > obs.y &&
+           ball.y - ball.r < obs.y + obs.h;
 }
