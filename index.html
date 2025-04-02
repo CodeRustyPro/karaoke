@@ -3,14 +3,422 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sing to Play</title>
-    <script src="https://cdn.jsdelivr.net/npm/p5@1.11.3/lib/p5.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/p5@1.11.3/lib/addons/p5.sound.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/ml5/0.12.2/ml5.min.js"></script>
+    <title>Karaoke Game - Sa Re Ga Ma Pa</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #1a1a2e; /* Dark blue background */
+            color: #e0e0e0; /* Light text */
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            overflow: hidden;
+        }
+        .game-container {
+            background-color: #162447; /* Slightly lighter blue */
+            border-radius: 1rem;
+            padding: 2rem;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3);
+            width: 90%;
+            max-width: 800px;
+            text-align: center;
+        }
+        .lyrics-display {
+            font-family: 'Press Start 2P', cursive; /* Game font for lyrics */
+            font-size: 2.5rem; /* Larger font size for single notes */
+            margin-bottom: 2rem;
+            min-height: 100px; /* Ensure space for lyrics */
+            color: #f4f4f9; /* Off-white lyrics */
+            background-color: #1f4068; /* Darker background for contrast */
+            padding: 1.5rem;
+            border-radius: 0.5rem;
+            line-height: 1.6;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            transition: color 0.2s ease; /* Smooth color transition */
+        }
+        .lyrics-display.active-note {
+             color: #ffcc00; /* Highlight active note */
+             text-shadow: 0 0 8px #ffcc00, 0 0 12px #ffcc00;
+        }
+        .pitch-visualizer {
+            height: 150px; /* Increased height */
+            background-color: #1b1b2f; /* Darker area */
+            margin-bottom: 2rem;
+            border-radius: 0.5rem;
+            position: relative;
+            overflow: hidden;
+            border: 2px solid #e0e0e0;
+        }
+        .target-pitch-bar {
+            position: absolute;
+            left: 10%;
+            width: 80%;
+            height: 15%;
+            background-color: #4caf50;
+            border-radius: 0.25rem;
+            transition: top 0.2s ease-out, background-color 0.2s ease;
+            display: none;
+            box-shadow: 0 0 5px #4caf50;
+        }
+         .target-pitch-bar.active { display: block; }
+         .target-pitch-bar.hit { background-color: #ffeb3b; box-shadow: 0 0 8px #ffeb3b; }
+        .user-volume-indicator {
+             position: absolute;
+             bottom: 5px;
+             left: 50%;
+             transform: translateX(-50%);
+             width: 15px;
+             background-image: linear-gradient(to top, #ff5722, #ff9800);
+             border-radius: 5px 5px 0 0;
+             transition: height 0.05s ease-out;
+             height: 0;
+             box-shadow: 0 0 5px #ff5722;
+        }
+        .score-display {
+            font-size: 2rem;
+            font-weight: bold;
+            color: #4caf50;
+            margin-bottom: 2rem;
+            font-family: 'Press Start 2P', cursive;
+        }
+        .controls button {
+            font-family: 'Press Start 2P', cursive;
+            background-color: #e43f5a;
+            color: white;
+            padding: 0.8rem 1.5rem;
+            border: none;
+            border-radius: 0.5rem;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: background-color 0.3s ease, transform 0.1s ease;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.2);
+            margin: 0 0.5rem;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .controls button:hover { background-color: #bf133a; }
+        .controls button:active { transform: scale(0.95); }
+        .controls button:disabled { background-color: #555; cursor: not-allowed; opacity: 0.7; }
+        .message-box {
+            margin-top: 1rem;
+            padding: 0.5rem;
+            background-color: rgba(255, 255, 255, 0.1);
+            border-radius: 0.5rem;
+            color: #ffcc00;
+            min-height: 2em;
+            font-size: 0.9rem;
+        }
+        i[data-lucide] {
+            width: 1.2em;
+            height: 1.2em;
+            stroke-width: 2;
+            margin-right: 0.5em;
+            display: inline-block;
+        }
+    </style>
 </head>
 <body>
-    <h1 style="text-align: center;">🎤 Sing to Control the Ball!</h1>
-    <p style="text-align: center;">Try singing in different pitches and see the ball move up or down!</p>
-    <script src="game.js"></script>
+    <div class="game-container">
+        <h1 class="text-3xl font-bold mb-6 text-center text-[#ffcc00] font-['Press_Start_2P']">Karaoke Challenge</h1>
+        <div class="lyrics-display" id="lyrics-display">Press Start!</div>
+        <div class="pitch-visualizer" id="pitch-visualizer">
+            <div class="target-pitch-bar" id="target-pitch-bar"></div>
+            <div class="user-volume-indicator" id="user-volume-indicator"></div>
+            <span class="absolute top-1 left-2 text-xs text-gray-400">Target Note</span>
+            <span class="absolute bottom-1 right-2 text-xs text-gray-400">Your Volume</span>
+        </div>
+        <div class="score-display">Score: <span id="score">0</span></div>
+        <div class="controls">
+            <button id="start-button">
+                <i data-lucide="play"></i>Start
+            </button>
+            <button id="stop-button" disabled>
+                <i data-lucide="stop-circle"></i>Stop
+            </button>
+        </div>
+        <div class="message-box" id="message-box">
+             Allow microphone access. Score increases if you make sound during a note! (Pitch detection is simulated).
+        </div>
+    </div>
+
+    <script>
+        // --- DOM Elements ---
+        const lyricsDisplay = document.getElementById('lyrics-display');
+        const pitchVisualizer = document.getElementById('pitch-visualizer');
+        const targetPitchBar = document.getElementById('target-pitch-bar');
+        const userVolumeIndicator = document.getElementById('user-volume-indicator');
+        const scoreDisplay = document.getElementById('score');
+        const startButton = document.getElementById('start-button');
+        const stopButton = document.getElementById('stop-button');
+        const messageBox = document.getElementById('message-box');
+
+        // --- Game Configuration ---
+        const FRAME_RATE = 30;
+        const VOLUME_THRESHOLD = -40;
+        const MAX_VOLUME_HEIGHT = 80;
+
+        // --- Song Data: Sa Re Ga Ma Pa ---
+        const songData = [
+            { lyric: "Sa", startTime: 1.0, duration: 1.5, pitchValue: 75 },
+            { lyric: "Re", startTime: 3.0, duration: 1.5, pitchValue: 65 },
+            { lyric: "Ga", startTime: 5.0, duration: 1.5, pitchValue: 55 },
+            { lyric: "Ma", startTime: 7.0, duration: 1.5, pitchValue: 45 },
+            { lyric: "Pa", startTime: 9.0, duration: 1.5, pitchValue: 35 },
+            { lyric: "", startTime: 10.5, duration: 0.5, pitchValue: 0 } // End marker
+        ];
+        const songDuration = songData[songData.length - 1].startTime + songData[songData.length - 1].duration;
+
+        // --- Game State ---
+        let score = 0;
+        let micStream = null; // Store the raw MediaStream
+        let analyser = null;
+        let micSourceNode = null; // Store the source node
+        let gameLoopInterval = null;
+        let currentSongTime = 0;
+        let currentLyricIndex = -1;
+        let isPlaying = false;
+        let microphoneReady = false;
+
+        // --- Audio Setup (Only gets MediaStream) ---
+        async function setupMicrophone() {
+            try {
+                if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                    throw new Error("Microphone access not supported by this browser.");
+                }
+
+                // Only get the stream, don't interact with Tone.js or AudioContext here
+                micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+
+                if (!micStream) {
+                    throw new Error("Failed to acquire microphone stream.");
+                }
+
+                console.log("Microphone stream acquired.");
+                messageBox.textContent = "Microphone ready! Press Start.";
+                microphoneReady = true;
+                startButton.disabled = false; // Enable start button
+
+            } catch (err) {
+                console.error("Error accessing microphone:", err);
+                messageBox.textContent = `Error: ${err.message}. Please allow microphone access.`;
+                startButton.disabled = true;
+                microphoneReady = false;
+            }
+        }
+
+        // --- Game Logic ---
+        function startGame() {
+            // Check if microphone is ready and we have the stream
+            if (!microphoneReady || isPlaying || !micStream) {
+                console.warn("Cannot start game. Mic ready:", microphoneReady, "Is playing:", isPlaying, "Mic stream exists:", !!micStream);
+                if (!micStream && microphoneReady) {
+                     messageBox.textContent = "Error: Microphone stream lost. Please refresh.";
+                     startButton.disabled = true; // Disable start if stream is lost
+                } else if (!microphoneReady) {
+                     messageBox.textContent = "Microphone not ready. Please allow access.";
+                }
+                return;
+            }
+
+             // Start Tone.js context - MUST be called after user interaction
+            Tone.start().then(() => {
+                console.log("AudioContext started by user gesture.");
+                const runningAudioContext = Tone.context; // Get the running context
+
+                // --- Create Audio Nodes and Connect NOW ---
+                try {
+                    // Create source node from the stored stream
+                    if (micSourceNode) { // Clean up previous node if any
+                       micSourceNode.disconnect();
+                    }
+                    micSourceNode = runningAudioContext.createMediaStreamSource(micStream);
+                    console.log("MediaStreamSourceNode created.");
+
+                    // Create analyser node
+                    if (analyser) { // Clean up previous analyser if any
+                        analyser.dispose();
+                    }
+                    analyser = new Tone.Analyser('waveform', 1024);
+                    console.log("Tone.Analyser created.");
+
+                    // Connect source to analyser
+                    Tone.connect(micSourceNode, analyser);
+                    console.log("Microphone source connected to analyser.");
+
+                } catch (audioNodeErr) {
+                     console.error("Error creating or connecting audio nodes:", audioNodeErr);
+                     messageBox.textContent = "Error setting up audio processing.";
+                     // Optional: Stop game or prevent start
+                     startButton.disabled = !microphoneReady; // Re-enable start if possible
+                     stopButton.disabled = true;
+                     return; // Prevent game loop from starting
+                }
+                // --- End of audio setup ---
+
+
+                isPlaying = true;
+                score = 0;
+                currentSongTime = 0;
+                currentLyricIndex = -1;
+                scoreDisplay.textContent = score;
+                lyricsDisplay.textContent = "";
+                lyricsDisplay.classList.remove('active-note');
+                targetPitchBar.classList.remove('active', 'hit');
+                targetPitchBar.style.display = 'none';
+                messageBox.textContent = "Sing!";
+                startButton.disabled = true;
+                stopButton.disabled = false;
+
+                // Start the game loop
+                const intervalTime = 1000 / FRAME_RATE;
+                gameLoopInterval = setInterval(gameLoop, intervalTime);
+
+            }).catch(err => {
+                 console.error("Failed to start Tone.js AudioContext:", err);
+                 messageBox.textContent = "Could not start audio. Please click Start again.";
+                 startButton.disabled = !microphoneReady;
+                 stopButton.disabled = true;
+            });
+        }
+
+        function stopGame() {
+            if (!isPlaying) return;
+
+            isPlaying = false;
+            clearInterval(gameLoopInterval);
+            gameLoopInterval = null;
+
+            // Disconnect and dispose of nodes when stopping
+            micSourceNode?.disconnect(); // Disconnect source
+            analyser?.dispose(); // Dispose analyser
+            micSourceNode = null; // Clear references
+            analyser = null;
+
+            // Don't stop the micStream itself, just the processing
+            // To fully release mic: micStream?.getTracks().forEach(track => track.stop());
+
+            lyricsDisplay.textContent = "Game Over!";
+            lyricsDisplay.classList.remove('active-note');
+            targetPitchBar.style.display = 'none';
+            targetPitchBar.classList.remove('active', 'hit');
+            userVolumeIndicator.style.height = '0%';
+
+            messageBox.textContent = `Final Score: ${score}. Press Start to play again.`;
+            startButton.disabled = !microphoneReady;
+            stopButton.disabled = true;
+        }
+
+        function gameLoop() {
+            if (!isPlaying || !analyser) return; // Check if analyser exists
+
+            const intervalTime = 1 / FRAME_RATE;
+            currentSongTime += intervalTime;
+
+            // --- Find current lyric/note ---
+            let activeNote = null;
+            let activeNoteIndex = -1;
+            for (let i = 0; i < songData.length; i++) {
+                const note = songData[i];
+                if (currentSongTime >= note.startTime && currentSongTime < note.startTime + note.duration) {
+                    activeNote = note;
+                    activeNoteIndex = i;
+                    break;
+                }
+            }
+
+            // --- Update Lyrics Display ---
+             if (activeNoteIndex !== currentLyricIndex) {
+                currentLyricIndex = activeNoteIndex;
+                if (activeNote && activeNote.lyric) {
+                    lyricsDisplay.textContent = activeNote.lyric;
+                    lyricsDisplay.classList.add('active-note');
+                } else {
+                    lyricsDisplay.textContent = "";
+                     lyricsDisplay.classList.remove('active-note');
+                }
+            } else if (!activeNote && currentLyricIndex !== -1) {
+                 lyricsDisplay.textContent = "";
+                 lyricsDisplay.classList.remove('active-note');
+                 currentLyricIndex = -1;
+            }
+
+
+            // --- Update Pitch Visualizer & Volume ---
+            let currentVolume = -Infinity;
+            let volumeHeight = 0;
+            if (analyser && typeof analyser.getValue === 'function') {
+                 try {
+                    const dbValues = analyser.getValue();
+                    currentVolume = dbValues.reduce((max, val) => (val > -Infinity ? Math.max(max, val) : max), -Infinity);
+
+                    const minDb = -60;
+                    const maxDb = 0;
+                    const normalizedVolume = Math.max(0, Math.min(1, (currentVolume - minDb) / (maxDb - minDb)));
+                    volumeHeight = normalizedVolume * MAX_VOLUME_HEIGHT;
+                    userVolumeIndicator.style.height = `${volumeHeight}%`;
+                 } catch (e) {
+                    console.error("Error getting analyser value:", e);
+                    currentVolume = -Infinity;
+                    userVolumeIndicator.style.height = '0%';
+                 }
+            } else {
+                 console.warn("Analyser not ready in gameLoop");
+                 userVolumeIndicator.style.height = '0%';
+            }
+
+
+            // --- Update Target Pitch Bar & Scoring ---
+            if (activeNote && activeNote.lyric) {
+                targetPitchBar.style.top = `${activeNote.pitchValue}%`;
+                targetPitchBar.style.display = 'block';
+                targetPitchBar.classList.add('active');
+
+                if (currentVolume > VOLUME_THRESHOLD) {
+                    score++;
+                    scoreDisplay.textContent = score;
+                    targetPitchBar.classList.add('hit');
+                } else {
+                    targetPitchBar.classList.remove('hit');
+                }
+            } else {
+                targetPitchBar.style.display = 'none';
+                targetPitchBar.classList.remove('active', 'hit');
+            }
+
+            // --- Check for Song End ---
+            if (currentSongTime >= songDuration) {
+                stopGame();
+            }
+        }
+
+        // --- Event Listeners ---
+        startButton.addEventListener('click', startGame);
+        stopButton.addEventListener('click', stopGame);
+
+        // --- Initialization ---
+        window.addEventListener('load', () => {
+            if (typeof lucide !== 'undefined' && typeof lucide.createIcons === 'function') {
+                 lucide.createIcons();
+                 console.log("Lucide icons created.");
+            } else {
+                console.warn("Lucide library not loaded or createIcons function not found.");
+            }
+
+            startButton.disabled = true;
+            stopButton.disabled = true;
+
+            // Setup microphone stream only
+            setupMicrophone();
+        });
+
+    </script>
 </body>
 </html>
