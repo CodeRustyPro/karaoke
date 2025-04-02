@@ -133,8 +133,7 @@
             <div class="target-pitch-bar" id="target-pitch-bar"></div>
             <div class="user-volume-indicator" id="user-volume-indicator"></div>
             <span class="absolute top-1 left-2 text-xs text-gray-400">Target Note</span>
-            <span class="absolute bottom-1 right-2 text-xs text-gray-400">Your Volume</span>
-        </div>
+            <span class="absolute bottom-1 right-2 text-xs text-gray-400">Your Volume (dB)</span> </div>
         <div class="score-display">Score: <span id="score">0</span></div>
         <div class="controls">
             <button id="start-button">
@@ -162,8 +161,8 @@
 
         // --- Game Configuration ---
         const FRAME_RATE = 30;
-        const VOLUME_THRESHOLD = -40;
-        const MAX_VOLUME_HEIGHT = 80;
+        const VOLUME_THRESHOLD = -40; // Threshold in dB. Adjust if needed.
+        const MAX_VOLUME_HEIGHT = 80; // Max height % for volume indicator
 
         // --- Song Data: Sa Re Ga Ma Pa ---
         const songData = [
@@ -178,9 +177,9 @@
 
         // --- Game State ---
         let score = 0;
-        let micStream = null; // Store the raw MediaStream
+        let micStream = null;
         let analyser = null;
-        let micSourceNode = null; // Store the source node
+        let micSourceNode = null;
         let gameLoopInterval = null;
         let currentSongTime = 0;
         let currentLyricIndex = -1;
@@ -193,19 +192,12 @@
                 if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
                     throw new Error("Microphone access not supported by this browser.");
                 }
-
-                // Only get the stream, don't interact with Tone.js or AudioContext here
                 micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-
-                if (!micStream) {
-                    throw new Error("Failed to acquire microphone stream.");
-                }
-
+                if (!micStream) { throw new Error("Failed to acquire microphone stream."); }
                 console.log("Microphone stream acquired.");
                 messageBox.textContent = "Microphone ready! Press Start.";
                 microphoneReady = true;
-                startButton.disabled = false; // Enable start button
-
+                startButton.disabled = false;
             } catch (err) {
                 console.error("Error accessing microphone:", err);
                 messageBox.textContent = `Error: ${err.message}. Please allow microphone access.`;
@@ -216,53 +208,37 @@
 
         // --- Game Logic ---
         function startGame() {
-            // Check if microphone is ready and we have the stream
             if (!microphoneReady || isPlaying || !micStream) {
                 console.warn("Cannot start game. Mic ready:", microphoneReady, "Is playing:", isPlaying, "Mic stream exists:", !!micStream);
-                if (!micStream && microphoneReady) {
-                     messageBox.textContent = "Error: Microphone stream lost. Please refresh.";
-                     startButton.disabled = true; // Disable start if stream is lost
-                } else if (!microphoneReady) {
-                     messageBox.textContent = "Microphone not ready. Please allow access.";
-                }
+                 if (!micStream && microphoneReady) { messageBox.textContent = "Error: Microphone stream lost. Please refresh."; startButton.disabled = true; }
+                 else if (!microphoneReady) { messageBox.textContent = "Microphone not ready. Please allow access."; }
                 return;
             }
 
-             // Start Tone.js context - MUST be called after user interaction
             Tone.start().then(() => {
                 console.log("AudioContext started by user gesture.");
-                const runningAudioContext = Tone.context; // Get the running context
+                const runningAudioContext = Tone.context;
 
-                // --- Create Audio Nodes and Connect NOW ---
                 try {
-                    // Create source node from the stored stream
-                    if (micSourceNode) { // Clean up previous node if any
-                       micSourceNode.disconnect();
-                    }
+                    if (micSourceNode) { micSourceNode.disconnect(); }
                     micSourceNode = runningAudioContext.createMediaStreamSource(micStream);
                     console.log("MediaStreamSourceNode created.");
 
-                    // Create analyser node
-                    if (analyser) { // Clean up previous analyser if any
-                        analyser.dispose();
-                    }
-                    analyser = new Tone.Analyser('waveform', 1024);
-                    console.log("Tone.Analyser created.");
+                    if (analyser) { analyser.dispose(); }
+                    // *** FIX: Change analyser type to 'fft' ***
+                    analyser = new Tone.Analyser('fft', 1024); // Use FFT to get dB values
+                    console.log("Tone.Analyser created (type: fft).");
 
-                    // Connect source to analyser
                     Tone.connect(micSourceNode, analyser);
                     console.log("Microphone source connected to analyser.");
 
                 } catch (audioNodeErr) {
                      console.error("Error creating or connecting audio nodes:", audioNodeErr);
                      messageBox.textContent = "Error setting up audio processing.";
-                     // Optional: Stop game or prevent start
-                     startButton.disabled = !microphoneReady; // Re-enable start if possible
+                     startButton.disabled = !microphoneReady;
                      stopButton.disabled = true;
-                     return; // Prevent game loop from starting
+                     return;
                 }
-                // --- End of audio setup ---
-
 
                 isPlaying = true;
                 score = 0;
@@ -277,7 +253,6 @@
                 startButton.disabled = true;
                 stopButton.disabled = false;
 
-                // Start the game loop
                 const intervalTime = 1000 / FRAME_RATE;
                 gameLoopInterval = setInterval(gameLoop, intervalTime);
 
@@ -291,38 +266,29 @@
 
         function stopGame() {
             if (!isPlaying) return;
-
             isPlaying = false;
             clearInterval(gameLoopInterval);
             gameLoopInterval = null;
-
-            // Disconnect and dispose of nodes when stopping
-            micSourceNode?.disconnect(); // Disconnect source
-            analyser?.dispose(); // Dispose analyser
-            micSourceNode = null; // Clear references
+            micSourceNode?.disconnect();
+            analyser?.dispose();
+            micSourceNode = null;
             analyser = null;
-
-            // Don't stop the micStream itself, just the processing
-            // To fully release mic: micStream?.getTracks().forEach(track => track.stop());
-
             lyricsDisplay.textContent = "Game Over!";
             lyricsDisplay.classList.remove('active-note');
             targetPitchBar.style.display = 'none';
             targetPitchBar.classList.remove('active', 'hit');
             userVolumeIndicator.style.height = '0%';
-
             messageBox.textContent = `Final Score: ${score}. Press Start to play again.`;
             startButton.disabled = !microphoneReady;
             stopButton.disabled = true;
         }
 
         function gameLoop() {
-            if (!isPlaying || !analyser) return; // Check if analyser exists
+            if (!isPlaying || !analyser) return;
 
             const intervalTime = 1 / FRAME_RATE;
             currentSongTime += intervalTime;
 
-            // --- Find current lyric/note ---
             let activeNote = null;
             let activeNoteIndex = -1;
             for (let i = 0; i < songData.length; i++) {
@@ -334,7 +300,6 @@
                 }
             }
 
-            // --- Update Lyrics Display ---
              if (activeNoteIndex !== currentLyricIndex) {
                 currentLyricIndex = activeNoteIndex;
                 if (activeNote && activeNote.lyric) {
@@ -350,20 +315,22 @@
                  currentLyricIndex = -1;
             }
 
-
-            // --- Update Pitch Visualizer & Volume ---
-            let currentVolume = -Infinity;
+            let currentVolume = -Infinity; // dB value
             let volumeHeight = 0;
             if (analyser && typeof analyser.getValue === 'function') {
                  try {
+                    // getValue() with type 'fft' returns an array of dB values
                     const dbValues = analyser.getValue();
+                    // Find the loudest frequency bin (max dB value)
                     currentVolume = dbValues.reduce((max, val) => (val > -Infinity ? Math.max(max, val) : max), -Infinity);
 
-                    const minDb = -60;
+                    // Normalize dB for display height (map -60dB to 0%, 0dB to 100%)
+                    const minDb = -60; // Adjust if your mic/environment differs
                     const maxDb = 0;
                     const normalizedVolume = Math.max(0, Math.min(1, (currentVolume - minDb) / (maxDb - minDb)));
                     volumeHeight = normalizedVolume * MAX_VOLUME_HEIGHT;
                     userVolumeIndicator.style.height = `${volumeHeight}%`;
+
                  } catch (e) {
                     console.error("Error getting analyser value:", e);
                     currentVolume = -Infinity;
@@ -374,13 +341,12 @@
                  userVolumeIndicator.style.height = '0%';
             }
 
-
-            // --- Update Target Pitch Bar & Scoring ---
             if (activeNote && activeNote.lyric) {
                 targetPitchBar.style.top = `${activeNote.pitchValue}%`;
                 targetPitchBar.style.display = 'block';
                 targetPitchBar.classList.add('active');
 
+                // Score only if volume (dB) is above the threshold
                 if (currentVolume > VOLUME_THRESHOLD) {
                     score++;
                     scoreDisplay.textContent = score;
@@ -393,7 +359,6 @@
                 targetPitchBar.classList.remove('active', 'hit');
             }
 
-            // --- Check for Song End ---
             if (currentSongTime >= songDuration) {
                 stopGame();
             }
@@ -411,11 +376,8 @@
             } else {
                 console.warn("Lucide library not loaded or createIcons function not found.");
             }
-
             startButton.disabled = true;
             stopButton.disabled = true;
-
-            // Setup microphone stream only
             setupMicrophone();
         });
 
